@@ -13,5 +13,5 @@ class RNNEncoder(torch.nn.Module):
         batch = x.shape[0]
         output, (h_n, _) =  self.rnn(x)
         # h_n = _h_n.view(batch, -1)
-        output = 
+        output = 1
         return h_n

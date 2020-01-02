@@ -24,13 +24,18 @@ def save_to_pkl(file, obj):
         pickle.dump(obj, f, )
 
 def load_from_pkl(file):
-    with open(file) as f:
+    with open(file, 'rb') as f:
         obj = pickle.load(f)
     return obj
 
 def save_to_json(file, obj):
     with open(file, 'w', encoding='utf8') as f:
         json.dump(obj, f, ensure_ascii=False, indent=2)
+
+def load_from_json(file):
+    with open(file, 'r', encoding='utf8') as f:
+        obj = json.load(f)
+    return obj
 
 def save_to_txt(file, texts):
     with open(file, 'w', encoding='utf8') as f:

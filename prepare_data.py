@@ -1,3 +1,5 @@
+import numpy
+import pandas
 from utils import *
 import scipy.io as scio
 import os
@@ -18,7 +20,14 @@ def _id_description(path):
             action_id += 1
     return id_desc
 
-def get_data_path(data_name):
+def _to_3d(matrix, nodes=20, dims=3):
+    """
+    @matrix: [[r1, g1, b1, r2, g2, b2, ....], [.....]]
+    """
+    new_matrix = np.array(matrix).reshape(shape=(1, nodes, dims))
+    return new_matrix
+
+def _get_data_path(data_name):
     data_home = bs['data_home']
     skeleton_dir = 'skeleton'
     desc_file = 'description.txt'
@@ -34,7 +43,7 @@ def _action_id_by_name(name):
 
 def _load_data(data_name):
     dataset = []
-    skeleton_path, desc_path =  get_data_path(data_name)
+    skeleton_path, desc_path =  _get_data_path(data_name)
     id_desc = _id_description(desc_path)
     skeleton_data = _load_skeleton(skeleton_path)
     for f_name in  skeleton_data.keys():
@@ -80,20 +89,34 @@ def _load_corpus(data_name):
 
 def build(data_name, reset=False):
     home = get_abs_path(bs['data_home'], data_name)
+    if not os.path.exists(home):
+        raise Exception(f"Can't find origin data at {home}")
     processed_home = get_abs_path(home, 'processed')
     if not os.path.exists(processed_home) or reset:
         shutil.rmtree(processed_home, ignore_errors=True)
         os.makedirs(processed_home)
     dataset = _load_data(data_name)
     corpus = _get_corpus(dataset)
-    corpus = '\n'.join(corpus)
+    corpus = ['<start>', '<end>'] + list(corpus)
+    corpus = {word: _id for _id, word in enumerate(corpus)}
     save_to_pkl(get_abs_path(processed_home, 'dataset.pkl'), dataset)
-    save_to_txt(get_abs_path(processed_home, 'corpus.txt'), corpus)
+    save_to_json(get_abs_path(processed_home, 'corpus.json'), corpus)
 
+
+def load(data_name, reset):
+    home = get_abs_path(bs['data_home'], data_name)
+    processed_home = get_abs_path(home, 'processed')
+    if reset or not os.path.exists(processed_home):
+        build(data_name)
+    dataset = load_from_pkl(get_abs_path(processed_home, 'dataset.pkl'))
+    corpus = load_from_json(get_abs_path(processed_home, 'corpus.json'))
+    return dataset, corpus
 
 if __name__ == "__main__":
     data_names = ['combined_15']
-    build(data_names[0], reset=True)
+    dataset, corpus = load(data_names[0], reset=True)
+    print(dataset)
+    print(corpus)
 
 # def load_combined_15(reset=False):
 #     data_name = 'combined_15'
