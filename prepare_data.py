@@ -1,11 +1,45 @@
-import numpy
+import numpy as np
 import pandas
 from utils import *
 import scipy.io as scio
 import os
 import shutil
+from torch.utils.data.dataset import Dataset
 
 bs = basic_settings
+
+class MyDataSet(Dataset):
+    def __init__(self, data_name, reset=False):
+        super(MyDataSet).__init__()
+        self.dataset, self.corpus = load(data_name, reset)
+        self.max_caption_length = max(map(lambda x: len(x['desc']), self.dataset))
+
+    def __len__(self):
+        return len(self.dataset)
+
+    @property
+    def vocab_size(self):
+        return len(self.corpus)
+    
+    @property
+    def max_len(self):
+        return self.max_caption_length
+
+    @property
+    def corpus(self):
+        return self.corpus
+
+    @property
+    def feature_dim(self):
+        return self.dataset[0]['data'].shape[-1]
+
+    def __getitem__(self, indice):
+        sample = self.dataset[indice]
+        data = sample['data']
+        desc = sample['desc']
+        caption, caption_length = map_to_id(desc, self.corpus, self.max_len)
+        return data, caption, caption_length
+
 
 def _id_description(path):
     id_desc = {}
@@ -52,7 +86,7 @@ def _load_data(data_name):
         data['data'] = skeleton_data[f_name]
         data['action_id'] = a_id
         data['num_seg_actions'] = id_desc[a_id]['num_actions']
-        data['desc'] = id_desc[a_id]['action_desc']
+        data['desc'] = split_text(id_desc[a_id]['action_desc'])
         data['action_name'] = id_desc[a_id]['name']
         dataset.append(data)
     return dataset
@@ -70,10 +104,8 @@ def _load_skeleton(path):
 
 def _get_corpus(dataset):
     corpus = set()
-    tokenizer = eng_tokenizer()
     for sample in dataset:
-        desc = sample['desc']
-        words = tokenizer(desc)
+        words = sample['desc']
         corpus.update(words)
     return corpus
 
@@ -97,7 +129,7 @@ def build(data_name, reset=False):
         os.makedirs(processed_home)
     dataset = _load_data(data_name)
     corpus = _get_corpus(dataset)
-    corpus = ['<start>', '<end>'] + list(corpus)
+    corpus = ['<start>', '<end>', '<pad>', '<unk>'] + list(corpus)
     corpus = {word: _id for _id, word in enumerate(corpus)}
     save_to_pkl(get_abs_path(processed_home, 'dataset.pkl'), dataset)
     save_to_json(get_abs_path(processed_home, 'corpus.json'), corpus)
