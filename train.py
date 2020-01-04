@@ -6,6 +6,7 @@ from prepare_data import load, MyDataSet
 from torch.utils.data.dataset import Subset
 from torch.utils.data.dataloader import DataLoader
 from torch.nn.utils.rnn import pack_padded_sequence
+from nltk.translate.bleu_score import corpus_bleu
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -41,7 +42,6 @@ def main(data_name):
     encoder = Encoder(dataset.feature_dim, output_dim=100)
     decoder = DecoderWithAttention(encoder.get_output_dim(), decoder_dim=100,
                                     attn_dim=100, embed_dim=embed_dim, vocab_size=vocab_size)
-    decoder.load_pretrained_embedding(embedding)
     decoder_optimizer = torch.optim.Adam(params=filter(lambda p: p.requires_grad, decoder.parameters()),
                                                  lr=lr)
     encoder = encoder.to(device)
@@ -61,7 +61,8 @@ def main(data_name):
         recent_bleu4 = validate(val_loader=val_loader,
                                 encoder=encoder,
                                 decoder=decoder,
-                                criterion=criterion)
+                                criterion=criterion,
+                                word2id=corpus)
 
 
 
@@ -104,5 +105,71 @@ def train_epoch(train_loader, encoder, decoder, optimizer, criterion, epoch):
                                                                           top5=top5accs))
 
 
-def validate(val_loader, encoder, decoder, criterion):
-    pass
+def validate(val_loader, encoder, decoder, criterion, word2id):
+    encoder.eval()
+    decoder.eval()
+
+    losses = AverageMeter()
+    top5accs = AverageMeter()
+
+    references = []
+    hypotheses = []
+
+    with torch.no_grad():
+        for _, (data, caps, caps_length) in enumerate(val_loader):
+            data = data.to(device)
+            caps = caps.to(device)
+            caps_length = caps_length.to(device)
+
+            encoded_video, _ = encoder(data)
+            scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder(encoded_video, caps, caps_length)
+
+            targets = caps_sorted[:, 1:]
+
+            scores_copy = scores.clone()
+            scores, _ = pack_padded_sequence(scores, decode_lengths, batch_first=True)
+            targets, _ = pack_padded_sequence(targets, decode_lengths, batch_first=True)
+                
+            # Calculate loss
+            loss = criterion(scores, targets)
+
+            # Add doubly stochastic attention regularization
+            loss += alpha_c * ((1. - alphas.sum(dim=1)) ** 2).mean()
+
+            # Keep track of metrics
+            losses.update(loss.item(), sum(decode_lengths))
+            top5 = accuracy(scores, targets, 5)
+            top5accs.update(top5, sum(decode_lengths))
+
+            for j in range(caps_sorted.shape[0]):
+                img_caps = caps_sorted[j].tolist()
+                img_captions = list(
+                    map(lambda c: [w for w in c if w not in {word2id['<start>'], word2id['<pad>']}],
+                        img_caps))  # remove <start> and pads
+                references.append(img_captions)
+
+            # Hypotheses
+            _, preds = torch.max(scores_copy, dim=2)
+            preds = preds.tolist()
+            temp_preds = list()
+            for j, p in enumerate(preds):
+                temp_preds.append(preds[j][:decode_lengths[j]])  # remove pads
+            preds = temp_preds
+            hypotheses.extend(preds)
+
+            assert len(references) == len(hypotheses)
+
+        # Calculate BLEU-4 scores
+        bleu4 = corpus_bleu(references, hypotheses)
+
+        print(
+            '\n * LOSS - {loss.avg:.3f}, TOP-5 ACCURACY - {top5.avg:.3f}, BLEU-4 - {bleu}\n'.format(
+                loss=losses,
+                top5=top5accs,
+                bleu=bleu4))
+
+    return bleu4
+
+
+if __name__ == "__main__":
+    main(data_name='combined_15')
