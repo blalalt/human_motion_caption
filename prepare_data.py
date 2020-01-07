@@ -4,40 +4,46 @@ from utils import *
 import scipy.io as scio
 import os
 import shutil
+import torch
 from torch.utils.data.dataset import Dataset
 
 bs = basic_settings
 
 class MyDataSet(Dataset):
     def __init__(self, data_name, reset=False):
-        super(MyDataSet).__init__()
-        self.dataset, self.corpus = load(data_name, reset)
-        self.max_caption_length = max(map(lambda x: len(x['desc']), self.dataset))
+        super(MyDataSet, self).__init__()
+        self._dataset, self._corpus = load(data_name, reset)
+        self._max_caption_length = max(map(lambda x: len(x['desc']), self._dataset))
+        self._max_timestamp = max(map(lambda x: x['data'].shape[0], self._dataset))
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self._dataset)
 
     @property
     def vocab_size(self):
-        return len(self.corpus)
+        return len(self._corpus)
     
     @property
     def max_len(self):
-        return self.max_caption_length
+        return self._max_caption_length
 
     @property
     def corpus(self):
-        return self.corpus
+        return self._corpus
 
     @property
     def feature_dim(self):
-        return self.dataset[0]['data'].shape[-1]
+        return self._dataset[0]['data'].shape[-1]
 
     def __getitem__(self, indice):
-        sample = self.dataset[indice]
+        sample = self._dataset[indice]
         data = sample['data']
+        data = pad(data, self._max_timestamp)
+        data = torch.tensor(data).float()
         desc = sample['desc']
         caption, caption_length = map_to_id(desc, self.corpus, self.max_len)
+        caption = torch.tensor(caption).long()
+        caption_length = torch.tensor(caption_length).long()
         return data, caption, caption_length
 
 

@@ -115,5 +115,32 @@ def load_embedding(emd_file, word2id):
         if word not in wv_model:
             continue
         else:
-            embedding[word2id[word]] = wv_model.get_vector(word)
+            embedding[word2id[word]] = torch.from_numpy(wv_model.get_vector(word))
     return embedding, embed_dim
+
+
+def pad(data, max_timestamp):
+    time_stamp, dims = data.shape
+    z = np.zeros(shape=(max_timestamp-time_stamp, dims))
+    return np.vstack((data, z))
+
+
+class Record:
+    def __init__(self):
+        self.batch_values = []
+        pass
+
+    def update(self, pred, target):
+        pass
+
+    def print_batch(self):
+        pass
+
+    def print_epoch(self):
+        avg_values = self.batch_values / len(self.batch_values)
+        self.batch_values = []
+        # TODO: 记录训练过程
+        pass
+
+    def _format(self):
+        pass
