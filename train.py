@@ -10,7 +10,7 @@ from nltk.translate.bleu_score import corpus_bleu
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available():
-    torch.cuda.set_device(0)
+    torch.cuda.set_device(1)
 batch_size = 64
 lr = 0.004
 epoches = 100
@@ -83,7 +83,7 @@ def train_epoch(train_loader, encoder, decoder, optimizer, criterion, epoch):
         scores, caps_sorted, decode_lengths, alphas, sort_ind = decoder(encoded_video, caps, caps_length)
 
         targets = caps_sorted[:, 1:]
-        print(f'score.shape={scores.shape}, target.shape={targets.shape}')
+        # print(f'score.shape={scores.shape}, target.shape={targets.shape}')
         scores = pack_padded_sequence(scores, decode_lengths, batch_first=True).data
         targets = pack_padded_sequence(targets, decode_lengths, batch_first=True).data
 
@@ -172,4 +172,5 @@ def validate(val_loader, encoder, decoder, criterion, word2id):
 
 
 if __name__ == "__main__":
-    main(data_name='combined_15')
+    data_sets = ['combined_15', 'WorkoutUOW_18']
+    main(data_name=data_sets[1])

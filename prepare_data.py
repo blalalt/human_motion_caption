@@ -15,6 +15,8 @@ class MyDataSet(Dataset):
         self._dataset, self._corpus = load(data_name, reset)
         self._max_caption_length = max(map(lambda x: len(x['desc']), self._dataset))
         self._max_timestamp = max(map(lambda x: x['data'].shape[0], self._dataset))
+        print('Loading data...')
+        print('data size ', len(self._dataset), '\n')
 
     def __len__(self):
         return len(self._dataset)
@@ -151,7 +153,7 @@ def load(data_name, reset):
     return dataset, corpus
 
 if __name__ == "__main__":
-    data_names = ['combined_15']
+    data_names = ['WorkoutUOW_18']
     dataset, corpus = load(data_names[0], reset=True)
     print(dataset)
     print(corpus)
