@@ -15,6 +15,11 @@ class MyDataSet(Dataset):
         self._dataset, self._corpus = load(data_name, reset)
         self._max_caption_length = max(map(lambda x: len(x['desc']), self._dataset))
         self._max_timestamp = max(map(lambda x: x['data'].shape[0], self._dataset))
+        self._action_names = list(set(map(lambda x: x['action_name'], self._dataset)))
+        self._action_ids = {name: _id for name, _id in enumerate(self._action_names)}
+        self._ids_action = {v: k for k, v in self._action_ids.items()}
+        self._action_index = list(map(lambda x: self._action_ids[x], self._dataset))
+
         print('Loading data...')
         print('data size ', len(self._dataset), '\n')
 
@@ -34,6 +39,10 @@ class MyDataSet(Dataset):
         return self._corpus
 
     @property
+    def action_index(self):
+        return self._action_index
+
+    @property
     def feature_dim(self):
         return self._dataset[0]['data'].shape[-1]
 
@@ -47,6 +56,12 @@ class MyDataSet(Dataset):
         caption = torch.tensor(caption).long()
         caption_length = torch.tensor(caption_length).long()
         return data, caption, caption_length
+
+    def action2id(self, action_name):
+        return self._action_ids.get(action_name)
+
+    def id2action(self, action_id):
+        return self._ids_action.get(action_id)
 
 
 def _id_description(path):
