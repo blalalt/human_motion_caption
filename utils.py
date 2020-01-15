@@ -3,6 +3,7 @@ import re
 import json
 import pickle
 import torch
+import xlsxwriter
 import numpy as np
 from nltk.tokenize import WordPunctTokenizer 
 from gensim.models import KeyedVectors
@@ -45,6 +46,20 @@ def load_from_json(file):
 def save_to_txt(file, texts):
     with open(file, 'w', encoding='utf8') as f:
         f.writelines(texts)
+
+def save_to_csv(file, lines):
+    # lines: List[List]
+    with open(file, 'w', encoding='utf8') as f:
+        for line in lines:
+            _write_line = ','.join(line)
+            f.writelines(_write_line + '\n')
+
+def save_to_xlsx(file, lines):
+    wb = xlsxwriter.Workbook(filename=file)
+    st = wb.add_worksheet()
+    for row, line in enumerate(lines):
+        st.write_row(row, 0, data=line)
+    wb.close()
 
 def split_text(strings):
     words = WordPunctTokenizer().tokenize(strings)

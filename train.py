@@ -1,8 +1,9 @@
 import torch
 import random
+from collections import Counter, defaultdict
 from model import Encoder, DecoderWithAttention, Attention
 from utils import *
-from prepare_data import load, MyDataSet
+from prepare_data import load, MyDataSet, save_result
 from torch.utils.data.dataset import Subset
 from torch.utils.data.dataloader import DataLoader
 from torch.nn.utils.rnn import pack_padded_sequence
@@ -18,12 +19,31 @@ alpha_c = 1
 print_freq = 1
 
 
+def _get_train_test_indice(class_index, ratio):
+    sample_indice = list(range(len(class_index)))
+    train_indice = []
+    test_indice = []
+    cls_indexes_map = defaultdict(lambda: [])
+    for i in sample_indice:
+        cl_inx = class_index[i]
+        cls_indexes_map[cl_inx].append(i)
+    # map(lambda i: cls_indexes_map[class_index[i]].append(i), sample_indice)
+    for k, v in cls_indexes_map.items():
+        _c_len = len(v)
+        _point = int(_c_len * ratio)
+        train_indice += v[:_point]
+        test_indice += v[_point:]
+    return train_indice, test_indice
+
+
 def _get_data_loader(dataset, ratio, batch_size):
     dataset_length = len(dataset)
-    sample_indice = list(range(dataset_length))
-    random.shuffle(sample_indice)
-    train_indice = sample_indice[:int(dataset_length * ratio)]
-    test_indice = sample_indice[int(dataset_length * ratio):]
+    action_index = dataset.action_index
+    train_indice, test_indice = _get_train_test_indice(action_index, ratio)
+
+    assert dataset_length == (len(train_indice) + len(test_indice))
+    assert len(set(train_indice + test_indice)) == dataset_length
+
     train_dataset = Subset(dataset, indices=train_indice)
     test_dataset = Subset(dataset, indices=test_indice)
     train_dataloader = DataLoader(train_dataset, num_workers=1, pin_memory=True,
@@ -34,10 +54,11 @@ def _get_data_loader(dataset, ratio, batch_size):
 
 
 def main(data_name):
-    dataset = MyDataSet(data_name=data_name)
+    dataset = MyDataSet(data_name=data_name, reset=False)
     vocab_size = dataset.vocab_size
     corpus = dataset.corpus
-    train_loader, val_loader = _get_data_loader(dataset, 0.9, batch_size)
+    id2word = {v: k for k, v in corpus.items()}
+    train_loader, val_loader = _get_data_loader(dataset, 0.5, batch_size)
 
     embedding, embed_dim = load_embedding(basic_settings['word2vec'], corpus)
 
@@ -50,6 +71,10 @@ def main(data_name):
     decoder = decoder.to(device)
     criterion = torch.nn.CrossEntropyLoss().to(device)
 
+    best_bleu4 = 0
+    best_hypos = []
+    best_refs = []
+
     for epoch in range(1, epoches + 1):
         # One epoch's training
         train_epoch(train_loader=train_loader,
@@ -60,11 +85,17 @@ def main(data_name):
                     epoch=epoch)
 
         # One epoch's validation
-        recent_bleu4 = validate(val_loader=val_loader,
-                                encoder=encoder,
-                                decoder=decoder,
-                                criterion=criterion,
-                                word2id=corpus)
+        bleu4_score, refs, hypos = validate(val_loader=val_loader,
+                                            encoder=encoder,
+                                            decoder=decoder,
+                                            criterion=criterion,
+                                            word2id=corpus)
+        if bleu4_score > best_bleu4:
+            best_bleu4 = bleu4_score
+            best_refs = refs
+            best_hypos = hypos
+    name = data_name + '_' + str(best_bleu4) + '.xlsx'
+    save_result(name, best_refs, best_hypos, id2word)
 
 
 def train_epoch(train_loader, encoder, decoder, optimizer, criterion, epoch):
@@ -168,9 +199,10 @@ def validate(val_loader, encoder, decoder, criterion, word2id):
                 top5=top5accs,
                 bleu=bleu4))
 
-    return bleu4
+    return bleu4, references, hypotheses
 
 
 if __name__ == "__main__":
-    data_sets = ['combined_15', 'WorkoutUOW_18']
-    main(data_name=data_sets[1])
+    data_sets = ['combined_15', 'WorkoutUOW_18', 'MSRC_12', 'WorkoutSU_10', 'Combined_17']
+    for data_set in data_sets:
+        main(data_name=data_set)

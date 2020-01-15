@@ -1,6 +1,7 @@
 import numpy as np
 import pandas
 from utils import *
+from collections import OrderedDict
 import scipy.io as scio
 import os
 import shutil
@@ -16,9 +17,9 @@ class MyDataSet(Dataset):
         self._max_caption_length = max(map(lambda x: len(x['desc']), self._dataset))
         self._max_timestamp = max(map(lambda x: x['data'].shape[0], self._dataset))
         self._action_names = list(set(map(lambda x: x['action_name'], self._dataset)))
-        self._action_ids = {name: _id for name, _id in enumerate(self._action_names)}
+        self._action_ids = {name: _id for _id, name in enumerate(self._action_names)}
         self._ids_action = {v: k for k, v in self._action_ids.items()}
-        self._action_index = list(map(lambda x: self._action_ids[x], self._dataset))
+        self._action_index = list(map(lambda x: self._action_ids[x['action_name']], self._dataset))
 
         print('Loading data...')
         print('data size ', len(self._dataset), '\n')
@@ -73,7 +74,7 @@ def _id_description(path):
             action_name, descs = line.split(":")
             num_actions = len(descs.split('.'))
             id_desc[action_id] = {'name': action_name, 'num_actions': num_actions,
-                                    'action_desc': descs}
+                                  'action_desc': descs}
             action_id += 1
     return id_desc
 
@@ -100,10 +101,10 @@ def _action_id_by_name(name):
 
 def _load_data(data_name):
     dataset = []
-    skeleton_path, desc_path =  _get_data_path(data_name)
+    skeleton_path, desc_path = _get_data_path(data_name)
     id_desc = _id_description(desc_path)
     skeleton_data = _load_skeleton(skeleton_path)
-    for f_name in  skeleton_data.keys():
+    for f_name in skeleton_data.keys():
         data = {}
         a_id = _action_id_by_name(f_name)
         data['data'] = skeleton_data[f_name]
@@ -122,6 +123,7 @@ def _load_skeleton(path):
         file_path = get_abs_path(path, file)
         video_mat = scio.loadmat(file_path)[_action_tag]
         _map[file_name] = video_mat
+    _map = OrderedDict(sorted(_map.items(), key=lambda t: t[0]))
     return _map
 
 
@@ -162,10 +164,19 @@ def load(data_name, reset):
     home = get_abs_path(bs['data_home'], data_name)
     processed_home = get_abs_path(home, 'processed')
     if reset or not os.path.exists(processed_home):
-        build(data_name)
+        build(data_name, reset=reset)
     dataset = load_from_pkl(get_abs_path(processed_home, 'dataset.pkl'))
     corpus = load_from_json(get_abs_path(processed_home, 'corpus.json'))
     return dataset, corpus
+
+
+def save_result(name, targets, preds, id2word):
+    _results = []
+    for target, pred in zip(targets, preds):
+        _target_words = ' '.join(map(lambda w_id: id2word[w_id], target[0]))
+        _pred_words = ' '.join(map(lambda w_id: id2word[w_id], pred))
+        _results.append([_target_words, _pred_words])
+    save_to_xlsx(name, _results)
 
 if __name__ == "__main__":
     data_names = ['WorkoutUOW_18']
